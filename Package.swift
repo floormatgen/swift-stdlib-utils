@@ -3,10 +3,9 @@
 
 import CompilerPluginSupport
 import PackageDescription
-import Foundation
 
 // Get access to the environment
-let environment = ProcessInfo.processInfo.environment
+let environment = Context.environment
 
 // MARK: - SwiftSyntax dependency
 
@@ -31,15 +30,10 @@ if let customVersionString = environment[swiftSyntaxCustomVersionEnvKey] {
   } else {
     fatalError("\(swiftSyntaxCustomVersionEnvKey) contains invalid version")
   }
-    
-  // Make sure the version is supported
-  guard (600...603).contains(customVersion.major) else {
-    fatalError("\(swiftSyntaxCustomVersionEnvKey) has unsupported version \(customVersion)")
-  }
 
   swiftSyntaxDependency = .package(url: swiftSyntaxPath, from: customVersion)
 } else {
-  swiftSyntaxDependency = .package(url: swiftSyntaxPath, "600.0.0"..<"604.0.0")
+  swiftSyntaxDependency = .package(url: swiftSyntaxPath, "600.0.0"..<"605.0.0")
 }
 
 // MARK: - Package
