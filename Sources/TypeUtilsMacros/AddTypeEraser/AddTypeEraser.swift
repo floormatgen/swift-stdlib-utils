@@ -109,7 +109,7 @@ extension AddTypeEraser {
     var members = MemberBlockItemListSyntax()
     
     // First get access modifier for the protocol
-    let accessModifier = protocolDecl.modifiers.accessModifier
+    var accessModifier = protocolDecl.modifiers.accessModifier
     // Get the protocol type constraint
     let typeConstraint = protocolDecl.typeConstraint
     
@@ -120,6 +120,11 @@ extension AddTypeEraser {
       bindingSpecifier = .keyword(.var)
     case .AnyObject, .Actor:
       bindingSpecifier = .keyword(.let)
+    }
+    
+    // Do not add access modifier for members if modifier is private
+    if let a = accessModifier, a.name.tokenKind == .keyword(.private) {
+      accessModifier = nil
     }
     
     // Add init and base member

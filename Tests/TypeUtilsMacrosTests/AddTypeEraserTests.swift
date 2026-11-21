@@ -85,4 +85,29 @@ final class AddTypeEraserTests: XCTestCase {
     )
   }
   
+  func test_privateClassBoundProtocol() {
+    assertMacroExpansion(
+      """
+      @AddTypeEraser
+      private protocol Foo: AnyObject {
+      }
+      """,
+      expandedSource: """
+      private protocol Foo: AnyObject {
+      }
+      
+      private final class AnyFoo: Foo {
+          let base: any Foo
+          init<T: Foo>(erasing base: consuming T) {
+              self.base = base
+          }
+          init<T: Foo>(_ base: consuming T) {
+              self.base = base
+          }
+      }
+      """,
+      macros: testMacros
+    )
+  }
+  
 }
