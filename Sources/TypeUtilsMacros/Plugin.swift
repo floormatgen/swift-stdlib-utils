@@ -9,6 +9,7 @@ struct Plugin: CompilerPlugin {
   
   let providingMacros: [any Macro.Type] = [
     AddTypeEraser.self,
+    AddCaseKind.self,
   ]
   
 }

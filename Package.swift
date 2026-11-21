@@ -4,6 +4,40 @@
 import CompilerPluginSupport
 import PackageDescription
 
+// Get access to the environment
+let environment = Context.environment
+
+// MARK: - SwiftSyntax dependency
+
+// This can be considered a workaround for the lack of multiple major versions of a package,
+// with swift-syntax being one of the most common examples of major version conflicts.
+// 
+// https://www.pointfree.co/blog/posts/116-being-a-good-citizen-in-the-land-of-swiftsyntax
+// https://forums.swift.org/t/multiple-major-versions-of-a-package-in-swiftpm-opening-the-discussion/86317
+// https://github.com/orgs/swiftlang/projects/32/views/1
+
+let swiftSyntaxCustomVersionEnvKey = "SWIFT_STDLIB_UTILS_SWIFTSYNTAX_VERSION"
+let swiftSyntaxPath = "https://github.com/swiftlang/swift-syntax.git"
+let swiftSyntaxDependency: Package.Dependency
+if let customVersionString = environment[swiftSyntaxCustomVersionEnvKey] {
+
+  // Make sure the version specified is valid
+  let customVersion: Version
+  if let majorVersion = Int(customVersionString) {
+    customVersion = Version(majorVersion, 0, 0)
+  } else if let version = Version(customVersionString) {
+    customVersion = version
+  } else {
+    fatalError("\(swiftSyntaxCustomVersionEnvKey) contains invalid version")
+  }
+
+  swiftSyntaxDependency = .package(url: swiftSyntaxPath, from: customVersion)
+} else {
+  swiftSyntaxDependency = .package(url: swiftSyntaxPath, "600.0.0"..<"605.0.0")
+}
+
+// MARK: - Package
+
 let package = Package(
   name: "swift-stdlib-utils",
   platforms: [
@@ -21,7 +55,7 @@ let package = Package(
     .library(name: "StdlibUtils",       targets: ["TypeUtils", "ConcurrencyUtils", "ObservationUtils"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/swiftlang/swift-syntax.git",  from: "603.0.0"),
+    swiftSyntaxDependency,
     .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0"),
   ],
   targets: [
@@ -30,17 +64,18 @@ let package = Package(
     .target(
       name: "TypeUtils",
       dependencies: [
+        .target(name: "_Compatibility"),
         .target(name: "TypeUtilsMacros"),
       ]
     ),
     .macro(
       name: "TypeUtilsMacros",
       dependencies: [
-        .target(name: "MacroUtils"),
-        .product(name: "SwiftSyntax", package: "swift-syntax"),
-        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        .target(name: "_MacroUtils"),
+        .product(name: "SwiftSyntax",         package: "swift-syntax"),
+        .product(name: "SwiftSyntaxMacros",   package: "swift-syntax"),
         .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-        .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+        .product(name: "SwiftDiagnostics",    package: "swift-syntax"),
       ]
     ),
     .testTarget(
@@ -67,11 +102,11 @@ let package = Package(
     .macro(
       name: "ConcurrencyUtilsMacros",
       dependencies: [
-        .target(name: "MacroUtils"),
-        .product(name: "SwiftSyntax", package: "swift-syntax"),
-        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        .target(name: "_MacroUtils"),
+        .product(name: "SwiftSyntax",         package: "swift-syntax"),
+        .product(name: "SwiftSyntaxMacros",   package: "swift-syntax"),
         .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-        .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+        .product(name: "SwiftDiagnostics",    package: "swift-syntax"),
       ]
     ),
     .testTarget(
@@ -92,7 +127,7 @@ let package = Package(
     .target(
       name: "ObservationUtils",
       dependencies: [
-        .target(name: "Compatability"),
+        .target(name: "_Compatibility"),
       ]
     ),
     .testTarget(
@@ -104,19 +139,19 @@ let package = Package(
 
     // MARK: Internal
     .target(
-      name: "Compatability"
+      name: "_Compatibility"
     ),
     // FIXME: Known issue with macro dependencies, see
     // https://forums.swift.org/t/swift-macro-linker-failures-on-linux-and-when-building-with-xcodebuild/84306
     //
     // Currently using symlinks to prevent code duplication
     .target(
-      name: "MacroUtils",
+      name: "_MacroUtils",
       dependencies: [
-        .product(name: "SwiftSyntax", package: "swift-syntax"),
-        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        .product(name: "SwiftSyntax",         package: "swift-syntax"),
+        .product(name: "SwiftSyntaxMacros",   package: "swift-syntax"),
         .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-        .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+        .product(name: "SwiftDiagnostics",    package: "swift-syntax"),
       ]
     ),
     
@@ -129,11 +164,33 @@ let package = Package(
 // MARK: - Swift Settings
 
 let swiftSettings: [SwiftSetting] = [
-  // .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+  // .strictMemorySafety(), // Enable after dropping 6.1
   .enableUpcomingFeature("ExistentialAny"),
+  .enableUpcomingFeature("ImmutableWeakCaptures"),
+  .enableUpcomingFeature("InternalImportsByDefault"),
   .enableUpcomingFeature("MemberImportVisibility"),
+  .enableUpcomingFeature("InferIsolatedConformances"),
+  // .enableUpcomingFeature("NonisolatedNonsendingByDefault"), // Enable after dropping 6.1
+  .enableUpcomingFeature("ImmutableWeakCaptures"),
 ]
 
 for target in package.targets {
   target.swiftSettings = (target.swiftSettings ?? []) + swiftSettings
+}
+
+// FIXME: Known issue with macro dependencies, see
+// https://forums.swift.org/t/swift-macro-linker-failures-on-linux-and-when-building-with-xcodebuild/84306
+//
+// Currently using symlinks to prevent code duplication
+
+// Check if we are not on macOS
+// macOS has access to xcodebuild, which causes linker failures
+
+// https://forums.swift.org/t/detecting-xpm-from-package-swift/55297/3
+let runningFromXcode = environment["__CFBundleIdentifier"] == "com.apple.dt.Xcode"
+
+if !runningFromXcode {
+  for target in package.targets where target.type == .macro {
+    target.exclude += ["./_MacroUtils"]
+  }
 }

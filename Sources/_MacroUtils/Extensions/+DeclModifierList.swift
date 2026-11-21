@@ -1,4 +1,4 @@
-import SwiftSyntax
+public import SwiftSyntax
 
 extension DeclModifierListSyntax {
   
@@ -11,7 +11,7 @@ extension DeclModifierListSyntax {
       case .private, .fileprivate, .internal, .package, .public:
         return modifier
       default:
-        break
+        continue
       }
       
     }
