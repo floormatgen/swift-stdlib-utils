@@ -123,7 +123,7 @@ public struct AddCaseKind: MemberMacro {
     }
     
     // Remove macro from copied attributes
-    kindEnumDecl.attributes.excludeMacro(withName: macroName, moduleName: Plugin.moduleName)
+    kindEnumDecl.attributes.excludeMacro(withName: macroName, moduleName: Plugin.hostingModuleName)
     
     return [
       DeclSyntax(kindEnumDecl),
@@ -147,7 +147,7 @@ extension AddCaseKind: ExtensionMacro {
     
     let caseKindProviderType = MemberTypeSyntax(
       baseType: IdentifierTypeSyntax(
-        name: .identifier(Plugin.moduleName)
+        name: .identifier(Plugin.hostingModuleName)
       ),
       name: .identifier(protocolName)
     )
