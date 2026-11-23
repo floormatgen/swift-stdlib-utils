@@ -55,6 +55,27 @@ final class AddTypeEraserTests: XCTestCase {
       originatorColumn: originatorColumn)
   }
   
+  func makeDiagnosticSpecForAssociatedTypeDecl(
+    line: Int,
+    column: Int,
+    originatorFileID: StaticString = #fileID,
+    originatorFile: StaticString = #filePath,
+    originatorLine: UInt = #line,
+    originatorColumn: UInt = #column
+  ) -> DiagnosticSpec {
+    DiagnosticSpec(
+      message: "`associatedtype` declarations are not supported",
+      line: line,
+      column: column,
+      fixIts: [
+        FixItSpec(message: "Remove `associatedtype` requirement")
+      ],
+      originatorFileID: originatorFileID,
+      originatorFile: originatorFile,
+      originatorLine: originatorLine,
+      originatorColumn: originatorColumn)
+  }
+  
   // MARK: - Tests
   
   func test_emptyProtocol() {
@@ -221,6 +242,29 @@ final class AddTypeEraserTests: XCTestCase {
         makeDiagnosticSpecForInitDecl(line: 3, column: 3),
         makeDiagnosticSpecForInitDecl(line: 4, column: 3),
         makeDiagnosticSpecForInitDecl(line: 5, column: 3),
+      ],
+      macros: testMacros
+    )
+  }
+  
+  func test_associatedtypeNotAllowed() {
+    assertMacroExpansion(
+      """
+      @AddTypeEraser
+      package protocol Foo: AnyObject {
+        associatedtype Bar
+        associatedtype Baz: Sendable
+      }
+      """,
+      expandedSource: """
+      package protocol Foo: AnyObject {
+        associatedtype Bar
+        associatedtype Baz: Sendable
+      }
+      """,
+      diagnostics: [
+        makeDiagnosticSpecForAssociatedTypeDecl(line: 3, column: 3),
+        makeDiagnosticSpecForAssociatedTypeDecl(line: 4, column: 3),
       ],
       macros: testMacros
     )

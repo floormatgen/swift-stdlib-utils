@@ -160,6 +160,13 @@ extension AddTypeEraser {
     var newMembers: [MemberBlockItemSyntax] = []
     var diagnostics: [Diagnostic] = []
     
+    func emptyDecl(usingTriviaFrom syntax: some SyntaxProtocol) -> some SyntaxProtocol {
+      var emptyDecl = "" as DeclSyntax
+      emptyDecl.leadingTrivia = syntax.leadingTrivia
+      emptyDecl.trailingTrivia = syntax.trailingTrivia
+      return emptyDecl
+    }
+    
     func ensureNonStatic(_ modifiers: DeclModifierListSyntax) -> Bool {
       if let staticModifier = modifiers.staticModifier {
         var emptyModifier = DeclModifierSyntax(name: .identifier(""))
@@ -173,34 +180,50 @@ extension AddTypeEraser {
             fixIt: .replace(
               message: MacroExpansionFixItMessage("Remove `static` from the declaration"),
               oldNode: staticModifier,
-              newNode: emptyModifier)))
+              newNode: emptyDecl(usingTriviaFrom: staticModifier))))
         return false
       }
       return true
     }
+
     
     for member in members {
-      if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
+      switch member.decl.as(DeclSyntaxEnum.self) {
+        
+      case .functionDecl(let funcDecl):
         assert(funcDecl.body == nil, "Protocol decl should not have implementation")
         guard ensureNonStatic(funcDecl.modifiers) else { continue }
-      } else if let varDecl = member.decl.as(VariableDeclSyntax.self) {
-        guard ensureNonStatic(varDecl.modifiers) else { continue }
-      } else if let initDecl = member.decl.as(InitializerDeclSyntax.self) {
-        assert(initDecl.body == nil, "Protocol decl should not have implementation")
         
-        var emptyDecl = "" as DeclSyntax
-        emptyDecl.leadingTrivia = initDecl.leadingTrivia
-        emptyDecl.trailingTrivia = initDecl.trailingTrivia
+      case .variableDecl(let varDecl):
+        guard ensureNonStatic(varDecl.modifiers) else { continue }
+        
+      case .initializerDecl(let initDecl):
+        assert(initDecl.body == nil, "Protocol decl should not have implementation")
         
         // Init requirements are not allowed, they can't be satisfied by a type-erasing wrapper
         diagnostics.append(
           Diagnostic(
-            node: member,
+            node: initDecl,
             message: MacroExpansionErrorMessage("`init` declarations are not supported"),
             fixIt: .replace(
               message: MacroExpansionFixItMessage("Remove `init` requirement"),
-              oldNode: member,
-              newNode: emptyDecl)))
+              oldNode: initDecl,
+              newNode: emptyDecl(usingTriviaFrom: initDecl))))
+        
+      case .associatedTypeDecl(let associatedTypeDecl):
+        
+        // Associated type requirements cannot easly be satisfied by a type-erasing wrapper
+        diagnostics.append(
+          Diagnostic(
+            node: associatedTypeDecl,
+            message: MacroExpansionErrorMessage("`associatedtype` declarations are not supported"),
+            fixIt: .replace(
+              message: MacroExpansionFixItMessage("Remove `associatedtype` requirement"),
+              oldNode: associatedTypeDecl,
+              newNode: emptyDecl(usingTriviaFrom: associatedTypeDecl))))
+        
+      default:
+        break
       }
     }
     
