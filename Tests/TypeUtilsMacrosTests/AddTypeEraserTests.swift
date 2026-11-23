@@ -2,6 +2,7 @@ import XCTest
 import SwiftSyntax
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
+import SwiftSyntaxMacrosGenericTestSupport
 import TypeUtilsMacros
 
 final class AddTypeEraserTests: XCTestCase {
@@ -9,6 +10,52 @@ final class AddTypeEraserTests: XCTestCase {
   let testMacros: [String : any Macro.Type] = [
     "AddTypeEraser": AddTypeEraser.self
   ]
+  
+  // MARK: - Utilities
+  
+  func makeDiagnosticSpecForStaticDecl(
+    line: Int,
+    column: Int,
+    originatorFileID: StaticString = #fileID,
+    originatorFile: StaticString = #filePath,
+    originatorLine: UInt = #line,
+    originatorColumn: UInt = #column
+  ) -> DiagnosticSpec {
+    DiagnosticSpec(
+      message: "`static` declarations are not supported",
+      line: line,
+      column: column,
+      fixIts: [
+        FixItSpec(message: "Remove `static` from the declaration"),
+      ],
+      originatorFileID: originatorFileID,
+      originatorFile: originatorFile,
+      originatorLine: originatorLine,
+      originatorColumn: originatorColumn)
+  }
+  
+  func makeDiagnosticSpecForInitDecl(
+    line: Int,
+    column: Int,
+    originatorFileID: StaticString = #fileID,
+    originatorFile: StaticString = #filePath,
+    originatorLine: UInt = #line,
+    originatorColumn: UInt = #column
+  ) -> DiagnosticSpec {
+    DiagnosticSpec(
+      message: "`init` declarations are not supported",
+      line: line,
+      column: column,
+      fixIts: [
+        FixItSpec(message: "Remove `init` requirement"),
+      ],
+      originatorFileID: originatorFileID,
+      originatorFile: originatorFile,
+      originatorLine: originatorLine,
+      originatorColumn: originatorColumn)
+  }
+  
+  // MARK: - Tests
   
   func test_emptyProtocol() {
     assertMacroExpansion(
@@ -106,6 +153,75 @@ final class AddTypeEraserTests: XCTestCase {
           }
       }
       """,
+      macros: testMacros
+    )
+  }
+  
+  func test_staticFunctionNotAllowed() {
+    assertMacroExpansion(
+      """
+      @AddTypeEraser
+      protocol Foo {
+        static func bar()
+      }
+      """,
+      expandedSource: """
+      protocol Foo {
+        static func bar()
+      }
+      """,
+      diagnostics: [
+        makeDiagnosticSpecForStaticDecl(line: 3, column: 3),
+      ],
+      macros: testMacros
+    )
+  }
+  
+  func test_staticVariablesNotAllowed() {
+    assertMacroExpansion(
+      """
+      @AddTypeEraser
+      internal protocol Foo: AnyObject {
+        static var foo: String { get }
+        static var bar: Int { get set }
+      }
+      """,
+      expandedSource: """
+      internal protocol Foo: AnyObject {
+        static var foo: String { get }
+        static var bar: Int { get set }
+      }
+      """,
+      diagnostics: [
+        makeDiagnosticSpecForStaticDecl(line: 3, column: 3),
+        makeDiagnosticSpecForStaticDecl(line: 4, column: 3),
+      ],
+      macros: testMacros
+    )
+  }
+  
+  func test_initNotAllowed() {
+    assertMacroExpansion(
+      """
+      @AddTypeEraser
+      fileprivate protocol Foo: Any {
+        init()
+        init(foo: Int)
+        init(foo: Int, _ bar: String)
+      }
+      """,
+      expandedSource: """
+      fileprivate protocol Foo: Any {
+        init()
+        init(foo: Int)
+        init(foo: Int, _ bar: String)
+      }
+      """,
+      diagnostics: [
+        makeDiagnosticSpecForInitDecl(line: 3, column: 3),
+        makeDiagnosticSpecForInitDecl(line: 4, column: 3),
+        makeDiagnosticSpecForInitDecl(line: 5, column: 3),
+      ],
       macros: testMacros
     )
   }

@@ -126,3 +126,5 @@ extension ProtocolDeclSyntax {
   }
   
 }
+
+public typealias ProtocolTypeConstraint = ProtocolDeclSyntax.TypeConstraint

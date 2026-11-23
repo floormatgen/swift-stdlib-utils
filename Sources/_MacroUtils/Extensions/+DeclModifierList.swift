@@ -20,4 +20,13 @@ extension DeclModifierListSyntax {
     return nil
   }
   
+  /// Checks if the list contains a `static` modifier, returning it if it exists
+  public var staticModifier: DeclModifierSyntax? {
+    for modifier in self {
+      guard case .keyword(let keyword) = modifier.name.tokenKind else { continue }
+      if keyword == .static { return modifier }
+    }
+    return nil
+  }
+  
 }

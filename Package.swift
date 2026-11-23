@@ -163,16 +163,18 @@ let package = Package(
 
 // MARK: - Swift Settings
 
-let swiftSettings: [SwiftSetting] = [
-  // .strictMemorySafety(), // Enable after dropping 6.1
-  .enableUpcomingFeature("ExistentialAny"),
-  .enableUpcomingFeature("ImmutableWeakCaptures"),
-  .enableUpcomingFeature("InternalImportsByDefault"),
-  .enableUpcomingFeature("MemberImportVisibility"),
-  .enableUpcomingFeature("InferIsolatedConformances"),
-  // .enableUpcomingFeature("NonisolatedNonsendingByDefault"), // Enable after dropping 6.1
-  .enableUpcomingFeature("ImmutableWeakCaptures"),
-]
+var swiftSettings: [SwiftSetting] {
+  [
+    // .strictMemorySafety(), // Enable after dropping 6.1
+    .enableUpcomingFeature("ExistentialAny"),
+    .enableUpcomingFeature("ImmutableWeakCaptures"),
+    .enableUpcomingFeature("InternalImportsByDefault"),
+    .enableUpcomingFeature("MemberImportVisibility"),
+    .enableUpcomingFeature("InferIsolatedConformances"),
+    // .enableUpcomingFeature("NonisolatedNonsendingByDefault"), // Enable after dropping 6.1
+    .enableUpcomingFeature("ImmutableWeakCaptures"),
+  ]
+}
 
 for target in package.targets {
   target.swiftSettings = (target.swiftSettings ?? []) + swiftSettings

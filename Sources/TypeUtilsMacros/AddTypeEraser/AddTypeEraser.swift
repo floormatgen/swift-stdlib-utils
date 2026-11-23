@@ -2,6 +2,7 @@ public import SwiftSyntax
 public import SwiftSyntaxMacros
 import SwiftSyntaxBuilder
 import SwiftDiagnostics
+import _MacroUtils
 
 public struct AddTypeEraser: PeerMacro {
   
@@ -16,9 +17,7 @@ public struct AddTypeEraser: PeerMacro {
       context.diagnose(
         Diagnostic(
           node: declaration,
-          message: MacroExpansionErrorMessage("Must be on a protocol declaration")
-        )
-      )
+          message: MacroExpansionErrorMessage("Must be on a protocol declaration")))
       return []
     }
     
@@ -28,9 +27,7 @@ public struct AddTypeEraser: PeerMacro {
       context.diagnose(
         Diagnostic(
           node: declaration,
-          message: MacroExpansionErrorMessage("Actors not currently supported")
-        )
-      )
+          message: MacroExpansionErrorMessage("Actors not currently supported")))
       return []
     }
     
@@ -42,7 +39,7 @@ public struct AddTypeEraser: PeerMacro {
     }
     
     // Generate members for the type
-    let members     = typeEraserMembers(for: protocolDecl)
+    let members     = try typeEraserMembers(for: protocolDecl)
     let memberBlock = MemberBlockSyntax(members: members)
     // Get access level
     let accessModifier = protocolDecl.modifiers.accessModifier
@@ -105,7 +102,7 @@ extension AddTypeEraser {
   
   internal static func typeEraserMembers(
     for protocolDecl: ProtocolDeclSyntax
-  ) -> MemberBlockItemListSyntax {
+  ) throws -> MemberBlockItemListSyntax {
     var members = MemberBlockItemListSyntax()
     
     // First get access modifier for the protocol
@@ -146,8 +143,72 @@ extension AddTypeEraser {
     members.append(MemberBlockItemSyntax(decl: initMember))
     
     // TODO: Handle protocol requirements
+    try members.append(
+      contentsOf: requirementsMembers(
+        for: protocolDecl.memberBlock.members,
+        accessModifier: accessModifier,
+        typeConstraint: typeConstraint))
     
     return members
   }
   
+  private static func requirementsMembers(
+    for members: some Collection<MemberBlockItemSyntax>,
+    accessModifier: DeclModifierSyntax?,
+    typeConstraint: ProtocolTypeConstraint
+  ) throws -> [MemberBlockItemSyntax] {
+    var newMembers: [MemberBlockItemSyntax] = []
+    var diagnostics: [Diagnostic] = []
+    
+    func ensureNonStatic(_ modifiers: DeclModifierListSyntax) -> Bool {
+      if let staticModifier = modifiers.staticModifier {
+        var emptyModifier = DeclModifierSyntax(name: .identifier(""))
+        emptyModifier.leadingTrivia = staticModifier.leadingTrivia
+        emptyModifier.trailingTrivia = staticModifier.trailingTrivia
+        
+        diagnostics.append(
+          Diagnostic(
+            node: staticModifier,
+            message: MacroExpansionErrorMessage("`static` declarations are not supported"),
+            fixIt: .replace(
+              message: MacroExpansionFixItMessage("Remove `static` from the declaration"),
+              oldNode: staticModifier,
+              newNode: emptyModifier)))
+        return false
+      }
+      return true
+    }
+    
+    for member in members {
+      if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
+        assert(funcDecl.body == nil, "Protocol decl should not have implementation")
+        guard ensureNonStatic(funcDecl.modifiers) else { continue }
+      } else if let varDecl = member.decl.as(VariableDeclSyntax.self) {
+        guard ensureNonStatic(varDecl.modifiers) else { continue }
+      } else if let initDecl = member.decl.as(InitializerDeclSyntax.self) {
+        assert(initDecl.body == nil, "Protocol decl should not have implementation")
+        
+        var emptyDecl = "" as DeclSyntax
+        emptyDecl.leadingTrivia = initDecl.leadingTrivia
+        emptyDecl.trailingTrivia = initDecl.trailingTrivia
+        
+        // Init requirements are not allowed, they can't be satisfied by a type-erasing wrapper
+        diagnostics.append(
+          Diagnostic(
+            node: member,
+            message: MacroExpansionErrorMessage("`init` declarations are not supported"),
+            fixIt: .replace(
+              message: MacroExpansionFixItMessage("Remove `init` requirement"),
+              oldNode: member,
+              newNode: emptyDecl)))
+      }
+    }
+    
+    // Make sure we have not run into any restrictions
+    guard diagnostics.isEmpty else {
+      throw DiagnosticsError(diagnostics: diagnostics)
+    }
+    
+    return newMembers
+  }
 }
